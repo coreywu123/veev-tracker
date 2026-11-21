@@ -156,7 +156,7 @@ function stage(h){const b=h.build||{},d=h.bd||{};let last="",next="";for(const [
 const chans=h=>CH.filter(c=>(h.ch||{})[c[0]]).map(c=>c[1]).join(", ");
 const SUPA_URL="https://ewtpfifjfbhjqelywnpm.supabase.co",SUPA_KEY="sb_publishable_dcO-Mn03vWxXZurRfK2LOQ_3T2Sq9AQ";
 const TIER={1:"#1F6B2B",2:"#3F8F4A",3:"#7FC489",4:"#B9E8BE",5:"#DFEAE0",6:"#EDEEEA"};
-const S={shapes:[],shape:"",newShape:null,base:"Light",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
+const S={shapes:[],shape:"",newShape:null,base:"Streets",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
 if(S.region==="North Bay")S.region="South Bay";
 try{const r=localStorage.getItem("veev_region");if(r)S.region=r;}catch(e){}
 const $=id=>document.getElementById(id);
@@ -293,10 +293,10 @@ function mountMaps(){
   document.querySelectorAll(".lmap").forEach(el=>{const cfg=MAPCFG[el.id];if(!cfg)return;
     const map=L.map(el,{zoomSnap:0.25,attributionControl:true});MAPS.push(map);
     const bases={"Streets":L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}),
-      "Light":L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:20,subdomains:"abcd",attribution:"&copy; OpenStreetMap &copy; CARTO"}),
+      "Gray":L.layerGroup([L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,maxNativeZoom:16,attribution:"&copy; Esri"}),L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,maxNativeZoom:16})]),
       "Satellite":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery &copy; Esri"})};
-    (bases[S.base]||bases.Light).addTo(map);L.control.layers(bases,null,{collapsed:true,position:"topright"}).addTo(map);map.attributionControl.setPrefix(false);
-    map.on("baselayerchange",e=>{S.base=e.name;try{localStorage.setItem("veev_base2",e.name);}catch(_){ }});
+    (bases[S.base]||bases.Streets).addTo(map);L.control.layers(bases,null,{collapsed:true,position:"topright"}).addTo(map);map.attributionControl.setPrefix(false);
+    map.on("baselayerchange",e=>{S.base=e.name;try{localStorage.setItem("veev_base3",e.name);}catch(_){ }});
     const b=cfg.b;const pts=cfg.ids.map(homeById).filter(Boolean).map(ll).filter(Boolean);
     if(pts.length&&!cfg.opt.small)map.fitBounds(L.latLngBounds(pts),{padding:[36,36],maxZoom:15});else map.fitBounds([[b.s,b.w],[b.n,b.e]]);
     const rad=x=>{const z=map.getZoom();return (z<10?3:z<11?4:z<12?5:z<13.5?6:8)-(x?0:1.5);};const marks=[];
@@ -507,7 +507,7 @@ function start(){S.ready=false;render();const db=mkdb(S.sb);S.db=db;let got=0;
   const sub=name=>db.collection(name).onSnapshot(s=>{S[name]=s.docs.map(x=>Object.assign({},x.data(),{id:x.id}));if(++got>=5)S.ready=true;S.err="";soft();},err=>{S.ready=true;S.err="Can't reach the data: "+(err.message||err)+". If this is the first run, the SQL setup script hasn't been run yet.";render();});
   ["homes","notes","comps","areas","shapes"].forEach(sub);}
 (async()=>{
-  try{S.base=localStorage.getItem("veev_base2")||"Light";}catch(_){ }
+  try{S.base=localStorage.getItem("veev_base3")||"Streets";}catch(_){ }
   if(!window.supabase){S.ready=true;S.err="The database library didn't load.";render();return;}
   S.sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
   const {data}=await S.sb.auth.getSession();
