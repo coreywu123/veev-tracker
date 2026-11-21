@@ -156,7 +156,7 @@ function stage(h){const b=h.build||{},d=h.bd||{};let last="",next="";for(const [
 const chans=h=>CH.filter(c=>(h.ch||{})[c[0]]).map(c=>c[1]).join(", ");
 const SUPA_URL="https://ewtpfifjfbhjqelywnpm.supabase.co",SUPA_KEY="sb_publishable_dcO-Mn03vWxXZurRfK2LOQ_3T2Sq9AQ";
 const TIER={1:"#1F6B2B",2:"#3F8F4A",3:"#7FC489",4:"#B9E8BE",5:"#DFEAE0",6:"#EDEEEA"};
-const S={shapes:[],shape:"",newShape:null,base:"Streets",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
+const S={shapes:[],shape:"",newShape:null,base:"Light",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
 if(S.region==="North Bay")S.region="South Bay";
 try{const r=localStorage.getItem("veev_region");if(r)S.region=r;}catch(e){}
 const $=id=>document.getElementById(id);
@@ -295,9 +295,12 @@ function mountMaps(){
     const bases={"Streets":L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}),
       "Light":L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:20,subdomains:"abcd",attribution:"&copy; OpenStreetMap &copy; CARTO"}),
       "Satellite":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery &copy; Esri"})};
-    (bases[S.base]||bases.Streets).addTo(map);L.control.layers(bases,null,{collapsed:false,position:"topright"}).addTo(map);
-    map.on("baselayerchange",e=>{S.base=e.name;try{localStorage.setItem("veev_base",e.name);}catch(_){ }});
-    const b=cfg.b;map.fitBounds([[b.s,b.w],[b.n,b.e]]);
+    (bases[S.base]||bases.Light).addTo(map);L.control.layers(bases,null,{collapsed:true,position:"topright"}).addTo(map);map.attributionControl.setPrefix(false);
+    map.on("baselayerchange",e=>{S.base=e.name;try{localStorage.setItem("veev_base2",e.name);}catch(_){ }});
+    const b=cfg.b;const pts=cfg.ids.map(homeById).filter(Boolean).map(ll).filter(Boolean);
+    if(pts.length&&!cfg.opt.small)map.fitBounds(L.latLngBounds(pts),{padding:[36,36],maxZoom:15});else map.fitBounds([[b.s,b.w],[b.n,b.e]]);
+    const rad=x=>{const z=map.getZoom();return (z<10?3:z<11?4:z<12?5:z<13.5?6:8)-(x?0:1.5);};const marks=[];
+    map.on("zoomend",()=>marks.forEach(([mk,x])=>mk.setRadius(rad(x))));
     if(cfg.opt.shapes){S.shapes.filter(x=>!cfg.opt.city||x.city===cfg.opt.city).forEach(x=>{if(!(x.pts||[]).length)return;
         const school=x.kind==="school";const pg=L.polygon(x.pts,school?{color:"#2B2B2B",weight:2.5,dashArray:"6 5",fill:false}:{color:"#2B2B2B",weight:1,fillColor:TIER[x.tier]||TIER[5],fillOpacity:0.45}).addTo(map);
         pg._sid=x.id;pg.bindTooltip(esc(x.name||""),{permanent:true,direction:"center",className:"shp"});
@@ -309,9 +312,9 @@ function mountMaps(){
       if(S.newShape)L.polygon(S.newShape.pts,{color:"#E08A3C",weight:2,dashArray:"4 4"}).addTo(map);}
     const hs=cfg.ids.map(homeById).filter(Boolean).sort((a,b)=>(ORDER[b.status]-ORDER[a.status]));
     hs.forEach(h=>{const c=ll(h);if(!c)return;const x=focus(h);
-      const mk=L.circleMarker(c,{radius:x?7:5,color:"#2B2B2B",weight:x?1.5:1,fillColor:COL[h.status]||"#fff",fillOpacity:1,dashArray:x?null:"2 2"}).addTo(map);
+      const mk=L.circleMarker(c,{radius:rad(x),color:"#2B2B2B",weight:x?1.5:1,fillColor:COL[h.status]||"#fff",fillOpacity:1,dashArray:x?null:"2 2"}).addTo(map);
       mk.bindTooltip(esc(String(h.address).replace(/ \(.*\)/,""))+" · "+esc(h.status==="Sold"?"In escrow":h.status)+(price(h)?" · "+m(price(h)):""),{className:"pinlab",direction:"top",offset:[0,-6],permanent:!!cfg.labels&&x});
-      mk.on("click",()=>{location.hash="home-"+h.id;});});
+      marks.push([mk,x]);mk.on("click",()=>{location.hash="home-"+h.id;});});
   });}
 function shapeForm(){const x=S.newShape?{name:"",kind:"hood",tier:3,note:"",city:S.newShape.city}:S.shapes.find(q=>q.id===S.shape);if(!x)return "";
   return `<h2>${S.newShape?"New boundary":"Boundary: "+esc(x.name||"")}</h2><form class="grid" id="shapeForm" data-id="${esc(S.newShape?"":x.id)}"><label class="wide">Name<input id="s-name" name="name" value="${esc(x.name||"")}" required></label><label>Type<select id="s-kind" name="kind"><option value="hood" ${x.kind!=="school"?"selected":""}>Neighborhood</option><option value="school" ${x.kind==="school"?"selected":""}>School zone</option></select></label><label>Value tier 1 (top) to 6<select id="s-tier" name="tier">${[1,2,3,4,5,6].map(t=>`<option ${Number(x.tier)===t?"selected":""}>${t}</option>`).join("")}</select></label><label class="wide">Note<input id="s-note" name="note" value="${esc(x.note||"")}" placeholder="Schools, $/sf read, what changes at this line"></label><div class="wide bar"><button class="btn sm" type="submit">Save boundary</button><button class="btn ghost sm" type="button" data-act="shape-cancel">${S.newShape?"Discard":"Close"}</button>${S.newShape?"":`<button class="btn ghost sm" type="button" data-act="del-shape" data-id="${esc(x.id)}">Delete</button>`}</div></form>`;}
@@ -504,7 +507,7 @@ function start(){S.ready=false;render();const db=mkdb(S.sb);S.db=db;let got=0;
   const sub=name=>db.collection(name).onSnapshot(s=>{S[name]=s.docs.map(x=>Object.assign({},x.data(),{id:x.id}));if(++got>=5)S.ready=true;S.err="";soft();},err=>{S.ready=true;S.err="Can't reach the data: "+(err.message||err)+". If this is the first run, the SQL setup script hasn't been run yet.";render();});
   ["homes","notes","comps","areas","shapes"].forEach(sub);}
 (async()=>{
-  try{S.base=localStorage.getItem("veev_base")||"Streets";}catch(_){ }
+  try{S.base=localStorage.getItem("veev_base2")||"Light";}catch(_){ }
   if(!window.supabase){S.ready=true;S.err="The database library didn't load.";render();return;}
   S.sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
   const {data}=await S.sb.auth.getSession();
