@@ -187,15 +187,21 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[0]>pt[0])!==(b[0]>pt[0]))&&(pt[1]<(b[1]-a[1])*(pt[0]-a[0])/(b[0]-a[0])+a[1]))c=!c;}return c;}
 let POCK=[],CITY=[];const cityAt=pt=>{const x=CITY.find(q=>pip(pt,q.pts));return x?x.name:"";};const PCOL=["#4E79A7","#F28E2B","#59A14F","#E15759","#B07AA1","#76B7B2","#EDC948","#9C755F"];
 const pocketsOf=mk=>{const g={};POCK.filter(x=>x.market===mk).forEach(x=>{g[x.name]=g[x.name]||{name:x.name,market:mk,zip:x.zip||"",label:x.label||x.name,tier:Number(((hoodMeta(mk).pt||{})[x.name])||x.tier||5),avoid:!!hoodMeta(mk).avoid||!!((hoodMeta(mk).pa||{})[x.name]),own:!!((hoodMeta(mk).pa||{})[x.name]),hs:x.hs,dist:x.dist,zip:x.zip,approx:x.approx,polys:[]};g[x.name].polys.push(x.pts);});return Object.values(g);};
-const pocketAt=pt=>{const x=POCK.find(q=>pip(pt,q.pts));return x?x.name:"";};
-const pocketObjAt=pt=>{const x=POCK.find(q=>pip(pt,q.pts));return x?pocketsOf(x.market).find(p=>p.name===x.name):null;};
-const NEWPREM=1.20,ZIPPREM=1.22,MINS=5,SALEDAYS=183;
+const pArea=q=>{if(q._a==null){let a=0;const p=q.pts;for(let i=0,j=p.length-1;i<p.length;j=i++)a+=(p[j][1]+p[i][1])*(p[j][0]-p[i][0]);q._a=Math.abs(a/2);}return q._a;};
+const segKm=(pt,a,b)=>{const k=0.795,px=pt[1]*k,py=pt[0],ax=a[1]*k,ay=a[0],bx=b[1]*k,by=b[0],dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy;const t=L?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L)):0;return Math.hypot(px-ax-t*dx,py-ay-t*dy)*111;};
+const GAPKM=1;
+function pockHit(pt){let best=null;for(const q of POCK){if(pip(pt,q.pts)&&(!best||pArea(q)<pArea(best)))best=q;}if(best)return best;let bd=GAPKM,bq=null;for(const q of POCK){const p=q.pts;if(q._bb==null){let lo=90,hi=-90,lw=180,he=-180;for(const c of p){if(c[0]<lo)lo=c[0];if(c[0]>hi)hi=c[0];if(c[1]<lw)lw=c[1];if(c[1]>he)he=c[1];}q._bb=[lo,hi,lw,he];}const bb=q._bb;if(pt[0]<bb[0]-0.012||pt[0]>bb[1]+0.012||pt[1]<bb[2]-0.015||pt[1]>bb[3]+0.015)continue;for(let i=0,j=p.length-1;i<p.length;j=i++){const d=segKm(pt,p[j],p[i]);if(d<bd){bd=d;bq=q;}}}return bq;}
+const pocketAt=pt=>{const x=pockHit(pt);return x?x.name:"";};
+const pocketObjAt=pt=>{const x=pockHit(pt);return x?pocketsOf(x.market).find(p=>p.name===x.name):null;};
+const NEWPREM=1.20,ZIPPREM=1.22,MINS=3,THIN=10,BIGSF=2400,SALEDAYS=183;
 function parseCsv(t){const rows=[];let cur=[],f="",q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;}else if(ch==='"')q=true;else if(ch===","){cur.push(f);f="";}else if(ch==="\n"){cur.push(f.replace(/\r$/,""));rows.push(cur);cur=[];f="";}else f+=ch;}if(f||cur.length){cur.push(f.replace(/\r$/,""));rows.push(cur);}return rows;}
 function saleDate(d){if(!d)return null;const t=Date.parse(String(d).replace(/-/g," "));return isNaN(t)?null:new Date(t);}
 let SALEC=null,SALEK="";
 function allSales(){const key=S.sales.map(x=>x.id+":"+(x.updated||"")+":"+(x.rows||[]).length).join("|");if(SALEC&&SALEK===key)return SALEC;const cut=Date.now()-SALEDAYS*864e5;const seen={};const out=[];S.sales.forEach(doc=>(doc.rows||[]).forEach(r=>{const o={a:r[0],z:r[1],p:r[2],sf:r[3],yr:r[4],d:r[5],lat:r[6],lng:r[7],lot:r[8]};const dt=saleDate(o.d);if(!dt||dt.getTime()<cut||!o.p||!o.sf||o.sf<1000||o.sf>5500)return;const k=nk(o.a)+"|"+o.z;if(seen[k])return;seen[k]=1;o.t=dt.getTime();o.mx=o.p/o.sf*Math.pow(MX_SF/o.sf,ELAST)*(o.yr>=2022?1:NEWPREM)*MX_SF;out.push(o);}));SALEC=out;SALEK=key;return out;}
 const median=v=>{const a=[...v].sort((x,y)=>x-y);const k=a.length>>1;return a.length%2?a[k]:(a[k-1]+a[k])/2;};
-const salesIn=polys=>allSales().filter(o=>polys.some(pp=>pip([o.lat,o.lng],pp)));
+let PSET=null,PSETN=-1;const salePock=o=>{if(o._pn!==POCK.length){o._pk=pockHit([o.lat,o.lng]);o._pn=POCK.length;}return o._pk;};
+const salesIn=polys=>{if(PSETN!==POCK.length){PSET=new Set(POCK.map(q=>q.pts));PSETN=POCK.length;}if(polys.length&&polys.every(pp=>PSET.has(pp)))return allSales().filter(o=>{const h=salePock(o);return h&&polys.includes(h.pts);});return allSales().filter(o=>polys.some(pp=>pip([o.lat,o.lng],pp)));};
+const mktSales=mk=>allSales().filter(o=>{const h=salePock(o);return h&&h.market===mk;});
 function salesValue(polys){const ss=salesIn(polys);if(ss.length<MINS)return null;return {v:r10(median(ss.map(o=>o.mx))),n:ss.length};}
 const LOT_DEF=0.18,LOT_MINOBS=150,LOT_MINGRP=15,LOT_TYP=6500;let LOTC=null,LOTK="";
 function lotModel(){const ov=(S.meta.find(x=>x.id==="lot")||{}).beta;const key=SALEK+"|"+CITY.length+"|"+POCK.length+"|"+ov;allSales();const key2=SALEK+"|"+CITY.length+"|"+POCK.length+"|"+ov;if(LOTC&&LOTK===key2)return LOTC;
@@ -217,14 +223,15 @@ function lotPanel(){const L=lotModel();const ex=[5000,6500,8000,10000,15000];con
 const veevSold=polys=>S.homes.filter(h=>{const c=ll(h);return focus(h)&&(h.status==="Sold"||h.status==="Closed")&&n(h.sale)&&c&&polys.some(pp=>pip(c,pp));});
 function pocketValue(P){const cs=veevSold(P.polys);const zm=zipModel(P.zip)||mktZipModel(P.market);
   if(cs.length>=MINC)return {v:r10(cs.reduce((a,h)=>a+n(h.sale),0)/cs.length),src:cs.length+" Veev Model X sales here",n:cs.length,comps:true};
-  {const sv=salesValue(P.polys);if(sv)return {v:sv.v,src:"6-month sales · median of "+sv.n+" sold",n:cs.length,sales:true};}
-  if(zm)return {v:r10(zm),src:"ZIP model "+(P.zip||""),n:cs.length};
+  {const ss=salesIn(P.polys);if(ss.length>=MINS){const big=ss.filter(o=>o.sf>=BIGSF).length;return {v:r10(median(ss.map(o=>o.mx))),src:"6-month sales · median of "+ss.length+" sold"+(ss.length<THIN?" † thin data, under "+THIN+" sales":"")+(big?"":" ‡ no sale over "+BIGSF.toLocaleString()+" sf, scaled up from smaller homes"),n:cs.length,sales:true,thin:ss.length<THIN,ns:ss.length};}
+    const ms=mktSales(P.market);if(ms.length>=THIN)return {v:r10(median(ms.map(o=>o.mx))),src:"† "+(ss.length?"only "+ss.length+" sold":"no sales")+" here in 6 months · showing the "+P.market+" median of "+ms.length+" sold",n:cs.length,thin:true,fallback:true,ns:ss.length};}
+  if(zm)return {v:r10(zm),src:"† no recent sales imported · ZIP model "+(P.zip||""),n:cs.length,thin:true,fallback:true};
   return null;}
-const avoidAt=pt=>{const x=POCK.find(q=>pip(pt,q.pts));if(!x)return null;const mt=hoodMeta(x.market);if(mt.avoid)return {what:x.market,note:mt.note||""};if((mt.pa||{})[x.name])return {what:x.name+" pocket in "+x.market,note:mt.note||""};return null;};
+const avoidAt=pt=>{const x=pockHit(pt);if(!x)return null;const mt=hoodMeta(x.market);if(mt.avoid)return {what:x.market,note:mt.note||""};if((mt.pa||{})[x.name])return {what:x.name+" pocket in "+x.market,note:mt.note||""};return null;};
 const cnt=hs=>{const x=hs.filter(focus).length,e=hs.length-x;return (x||e)?[x?x+" X":"",e?e+" E":""].filter(Boolean).join(" · "):"0";};
 function declutter(map){const els=[...map.getContainer().querySelectorAll(".leaflet-tooltip.shp")];els.forEach(e=>e.style.visibility="");const kept=[];els.sort((a,b)=>(b.dataset.pri||0)-(a.dataset.pri||0)).forEach(e=>{const r=e.getBoundingClientRect();if(!r.width)return;if(kept.some(k=>!(r.right<k.left-2||r.left>k.right+2||r.bottom<k.top-2||r.top>k.bottom+2)))e.style.visibility="hidden";else kept.push(r);});}
 let BUILTIN=[],SCH={hs:[],ds:[],hsSrc:"",dsSrc:""};
-function schoolAt(pt){const hs=SCH.hs.filter(x=>pip(pt,x.pts)).map(x=>x.name);if(!hs.length){const pk=POCK.find(q=>pip(pt,q.pts));if(pk&&pk.hs)hs.push(pk.hs);}const ds=SCH.ds.filter(x=>pip(pt,x.pts));const hd=ds.filter(x=>x.level==="High").map(x=>x.name),el=ds.filter(x=>x.level!=="High").map(x=>x.name);
+function schoolAt(pt){const hs=SCH.hs.filter(x=>pip(pt,x.pts)).map(x=>x.name);if(!hs.length){const pk=pockHit(pt);if(pk&&pk.hs)hs.push(pk.hs);}const ds=SCH.ds.filter(x=>pip(pt,x.pts));const hd=ds.filter(x=>x.level==="High").map(x=>x.name),el=ds.filter(x=>x.level!=="High").map(x=>x.name);
   return {hs:hs.length?hs.join(" / "):(hd.length?hd[0]+" (school set by address)":(ds.some(x=>x.level==="Unified")?"":"")),dist:el.concat(hd).join(" + ")};}
 function schoolRows(pt){const z=schoolAt(pt),pk=pocketAt(pt),cn=cityAt(pt);return (pk?row("Pocket",`<b>${esc(pk)}</b>`):"")+(cn?row("City neighborhood",esc(cn)):"")+(z.hs?row("High school zone",`<b>${esc(z.hs)}</b>`):"")+(z.dist?row("School district",esc(z.dist)):"");}
 const myShapes=()=>S.shapes.filter(x=>!x.starter&&!String(x.id).startsWith("hs-"));
