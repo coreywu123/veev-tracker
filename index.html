@@ -171,8 +171,8 @@ function stage(h){const b=h.build||{},d=h.bd||{};let last="",next="";for(const [
 const chans=h=>CH.filter(c=>(h.ch||{})[c[0]]).map(c=>c[1]).join(", ");
 const SUPA_URL="https://ewtpfifjfbhjqelywnpm.supabase.co",SUPA_KEY="sb_publishable_dcO-Mn03vWxXZurRfK2LOQ_3T2Sq9AQ";
 const TIER={1:"#1F6B2B",2:"#3F8F4A",3:"#7FC489",4:"#B9E8BE",5:"#DFEAE0",6:"#EDEEEA"};
-const MARKETS=["Willow Glen","Cambrian","Blossom Valley","Santa Teresa","Almaden","Evergreen","West San Jose"];
-const ZIPMKT={"95125":"Willow Glen","95124":"Cambrian","95118":"Blossom Valley","95123":"Blossom Valley","95136":"Blossom Valley","95119":"Santa Teresa","95139":"Santa Teresa","95120":"Almaden","95121":"Evergreen","95148":"Evergreen","95135":"Evergreen","95138":"Evergreen","95129":"West San Jose","95130":"West San Jose","95117":"West San Jose","95128":"West San Jose"};
+const MARKETS=["Willow Glen","Cambrian","Cambrian East (95118)","Blossom Valley","Santa Teresa","Almaden","Evergreen","West San Jose"];
+const ZIPMKT={"95125":"Willow Glen","95124":"Cambrian","95118":"Cambrian East (95118)","95123":"Blossom Valley","95136":"Blossom Valley","95119":"Santa Teresa","95139":"Santa Teresa","95120":"Almaden","95121":"Evergreen","95148":"Evergreen","95135":"Evergreen","95138":"Evergreen","95129":"West San Jose","95130":"West San Jose","95117":"West San Jose","95128":"Burbank / Cory","95126":"Rose Garden"};
 const CCOL={Sold:"#D93025",Active:"#1FA64A",Pending:"#F2A900",Watch:"#9AA0A6"};
 const STARTER=[["Willow Glen",2,[[37.317,-121.915],[37.318,-121.893],[37.305,-121.876],[37.285,-121.868],[37.268,-121.872],[37.270,-121.905],[37.285,-121.920],[37.300,-121.922]]],
 ["Cambrian",3,[[37.277,-121.945],[37.277,-121.906],[37.262,-121.900],[37.245,-121.905],[37.235,-121.925],[37.238,-121.950],[37.255,-121.953]]],
@@ -183,8 +183,11 @@ const STARTER=[["Willow Glen",2,[[37.317,-121.915],[37.318,-121.893],[37.305,-12
 ["West San Jose",2,[[37.325,-122.015],[37.330,-121.975],[37.330,-121.935],[37.305,-121.930],[37.290,-121.950],[37.285,-121.985],[37.290,-122.010],[37.305,-122.020]]]];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[0]>pt[0])!==(b[0]>pt[0]))&&(pt[1]<(b[1]-a[1])*(pt[0]-a[0])/(b[0]-a[0])+a[1]))c=!c;}return c;}
-function shapesAt(pt,kind){return S.shapes.filter(x=>(x.pts||[]).length>2&&(!kind||(x.kind||"hood")===kind)&&pip(pt,x.pts));}
-function marketOf(g){const pt=[g.lat,g.lng];const mine=shapesAt(pt,"hood");const own=mine.find(x=>!x.starter);if(own)return own.name;if(ZIPMKT[g.zip])return ZIPMKT[g.zip];if(mine[0])return mine[0].name;return g.city||"Other";}
+let BUILTIN=[];
+const myShapes=()=>S.shapes.filter(x=>!x.starter);
+const allShapes=()=>{const mine=myShapes();const names=new Set(mine.filter(x=>(x.kind||"hood")==="hood").map(x=>x.name));return mine.concat(BUILTIN.filter(b=>!names.has(b.name)));};
+function shapesAt(pt,kind){return myShapes().filter(x=>(x.pts||[]).length>2&&(!kind||(x.kind||"hood")===kind)&&pip(pt,x.pts));}
+function marketOf(g){const pt=[g.lat,g.lng];const own=shapesAt(pt,"hood")[0];if(own)return own.name;const b=BUILTIN.find(x=>pip(pt,x.pts));if(b)return b.name;if(ZIPMKT[g.zip])return ZIPMKT[g.zip];return g.city||"Other";}
 function regionOf(g){const c=String(g.county||"");return /Santa Clara/i.test(c)?"South Bay":/Alameda|Contra Costa/i.test(c)?"East Bay":/San Mateo/i.test(c)?"Peninsula":"South Bay";}
 async function geocode(q){
   const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=us&viewbox=-122.65,38.15,-121.45,36.95&bounded=1&q="+encodeURIComponent(q);
@@ -200,7 +203,7 @@ function searchBox(){const F=S.found;let o=`<form class="msearch" id="searchForm
   o+=`<div class="found"><b>${esc(F.road||F.q)}</b><div class="sub">${esc([F.city,F.zip].filter(Boolean).join(" "))} · ${esc(F.region)}</div><dl>${row("Market group",`<b>${esc(F.market)}</b>`)}`+
     row("Model X estimate",(st?`<span class="big num">${full(r10(st.val))}</span><span class="sm">from ${st.n} sold comp${st.n>1?"s":""} in ${esc(F.market)} at $${Math.round(st.avg).toLocaleString()}/sf adjusted</span>`:`<span class="mute">No sold comps logged for ${esc(F.market)} yet.</span>`)+(zm?`<span class="sm">ZIP model for ${esc(F.zip)}: ${full(r10(zm))}</span>`:""),1)+
     (subs.length?row("Sub-neighborhoods in this ZIP",subs.map(a=>`<div><b>${esc(a.name)}</b> · tier ${esc(a.tier)}<span class="sm">${esc(a.schools||"")}</span></div>`).join(""),1):"")+
-    (mine.length?row("Inside your boundaries",esc(mine.map(x=>x.name+(x.kind==="school"?" (school zone)":"")+(x.starter?" (approx.)":"")).join(", ")),1):"")+
+    (mine.length?row("Inside your boundaries",esc(mine.map(x=>x.name+(x.kind==="school"?" (school zone)":"")+"").join(", ")),1):"")+
     `</dl><div class="sm">Schools here are the candidates for the ZIP. Confirm the exact assignment on the district locator.</div><div class="bar"><button class="btn sm" data-act="found-lot">Add as a lot</button><button class="btn ghost sm" data-act="found-comp">Add as a comp</button><a class="btn ghost sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(F.lat+","+F.lng)}" target="_blank" rel="noopener">Google Maps</a><button class="btn ghost sm" data-act="found-clear">Clear</button></div></div>`;
   return o;}
 const S={found:null,compEdit:"",compPre:null,shapes:[],shape:"",newShape:null,base:"Streets",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
@@ -350,7 +353,8 @@ function mountMaps(){
     const rad=x=>{const z=map.getZoom();return (z<10?3:z<11?4:z<12?5:z<13.5?6:8)-(x?0:1.5);};const marks=[];
     const place=()=>{const used=[];marks.forEach(([mk,x,c])=>{const r=rad(x),b=map.latLngToContainerPoint(c);let p=b,k=0;while(k<30&&used.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<r*1.8)){k++;const ang=k*2.4,d=r*1.3*Math.sqrt(k);p=L.point(b.x+Math.cos(ang)*d,b.y+Math.sin(ang)*d);}used.push(p);mk.setLatLng(k?map.containerPointToLatLng(p):c);mk.setRadius(r);});};
     map.on("zoomend",place);
-    if(cfg.opt.shapes){S.shapes.filter(x=>!cfg.opt.city||x.city===cfg.opt.city).forEach(x=>{if(!(x.pts||[]).length)return;
+    if(cfg.opt.shapes){allShapes().filter(x=>!cfg.opt.city||x.city===cfg.opt.city).forEach(x=>{if(!(x.pts||[]).length)return;
+        if(x.builtin){const pg=L.polygon(x.pts,{color:"#2B2B2B",weight:1.2,fillColor:TIER[x.tier]||TIER[5],fillOpacity:0.28,interactive:false,pmIgnore:true}).addTo(map);pg.bindTooltip(esc(x.name),{permanent:true,direction:"center",className:"shp"});return;}
         const school=x.kind==="school";const pg=L.polygon(x.pts,school?{color:"#2B2B2B",weight:2.5,dashArray:"6 5",fill:false}:{color:"#2B2B2B",weight:1,fillColor:TIER[x.tier]||TIER[5],fillOpacity:0.45}).addTo(map);
         pg._sid=x.id;pg.bindTooltip(esc(x.name||""),{permanent:true,direction:"center",className:"shp"});
         pg.on("click",()=>{if(map.pm&&(map.pm.globalDrawModeEnabled()||map.pm.globalEditModeEnabled()||map.pm.globalRemovalModeEnabled()))return;S.shape=x.id;S.newShape=null;render();});
@@ -396,9 +400,9 @@ function viewBrowse(){
     left=`<h2>${esc(R)} cities <small>Model X and Z counts</small></h2><div class="tw"><table><tr><th>City</th>${hd}</tr>`+cs.map(c=>`<tr data-b="c:${esc(c)}" style="cursor:pointer"><td><b>${esc(c)}</b></td>${cnt(X.filter(h=>h.city===c))}</tr>`).join("")+`</table></div><div class="bar"><button class="btn sm" data-act="add-home">${S.addHome?"Close":"Add a lot or home"}</button><span class="msg">${esc(S.msg)}</span></div>`+(S.addHome?homeForm():"");}
   else{b=cityBounds(C)||RB[R];lab=(b.n-b.s)<0.07;const hs=X.filter(h=>h.city===C);
     o+=`<div class="filters">${[["inv","Inventory"],["sold","Sold comps"],["hoods","Neighborhoods"]].map(([k,l])=>`<button class="chipbtn ${T===k?"on":""}" data-b="t:${k}">${l}</button>`).join("")}</div>`;
-    if(T==="hoods"){S.city=C;const cb=cityBounds(C)||RB[R];const mine=S.shapes.filter(x=>x.city===C);
-      const list=`<h2>Your boundaries <small>${mine.length} drawn in ${esc(C)}</small></h2>`+(mine.length?`<div class="tw"><table style="min-width:0"><tr><th>Name</th><th>Type</th><th>Tier</th><th>Note</th></tr>`+mine.map(x=>`<tr data-shape="${esc(x.id)}" style="cursor:pointer"><td><b>${esc(x.name)}</b></td><td>${x.kind==="school"?"School zone":"Neighborhood"}</td><td>${x.kind==="school"?"–":`<i class="st t${esc(x.tier)}" style="font-style:normal">${esc(x.tier)}</i>`}</td><td>${esc(x.note||"")}</td></tr>`).join("")+`</table></div>`:`<div class="quiet">None yet. Use the polygon tool at the top left of the map: click each corner, then click the first point to close it. Name it and pick neighborhood or school zone.</div>`);
-      const need=C==="San Jose"&&STARTER.some(q=>!S.shapes.some(x=>x.name===q[0]));
+    if(T==="hoods"){S.city=C;const cb=cityBounds(C)||RB[R];const mine=myShapes().filter(x=>x.city===C);
+      const list=`<h2>Your boundaries <small>${mine.length} drawn in ${esc(C)}</small></h2>`+(mine.length?`<div class="tw"><table style="min-width:0"><tr><th>Name</th><th>Type</th><th>Tier</th><th>Note</th></tr>`+mine.map(x=>`<tr data-shape="${esc(x.id)}" style="cursor:pointer"><td><b>${esc(x.name)}</b></td><td>${x.kind==="school"?"School zone":"Neighborhood"}</td><td>${x.kind==="school"?"–":`<i class="st t${esc(x.tier)}" style="font-style:normal">${esc(x.tier)}</i>`}</td><td>${esc(x.note||"")}</td></tr>`).join("")+`</table></div>`:`<div class="quiet">The shaded areas on the map are built in from Census ZIP boundaries, so nothing needs drawing. Only draw a boundary to refine one: a shape you draw with the same name as a built-in area replaces it, and school zones or sub-pockets can be added on top. To draw, use the polygon tool at the top left of the map: click each corner, then click the first point to close it. Name it and pick neighborhood or school zone.</div>`);
+      const need=false;
       const starter=need?`<div class="bar"><button class="btn sm" data-act="starter">Add starter boundaries for the 7 San Jose markets</button><span class="quiet" style="margin:0">Approximate shapes. Use the edit tool on the map to drag corners.</span></div>`:"";
       return o+`<div class="split"><div>${shapeForm()}${starter}${list}${viewAreas()}</div><div class="side">${searchBox()}<div class="mapbox">${mapSvg(mapHomes().filter(h=>h.city===C),cb,false,{shapes:true,draw:true,find:true,city:C})}</div>${legend()}<div class="quiet">Solid fill is a neighborhood, colored by value tier. Dashed outline is a school zone. Switch to Satellite at the top right.</div></div></div>`;}
     if(T==="sold"){const cl=sortHomes(hs.filter(h=>h.status==="Closed")),es=S.homes.filter(h=>!focus(h)&&h.city===C).sort((a,b)=>(n(b.sale)||0)-(n(a.sale)||0));
@@ -585,6 +589,7 @@ function start(){S.ready=false;render();const db=mkdb(S.sb);S.db=db;let got=0;
   ["homes","notes","comps","areas","shapes"].forEach(sub);}
 (async()=>{
   try{S.base=localStorage.getItem("veev_base3")||"Streets";}catch(_){ }
+  try{if(window.fetch){const r=await fetch("boundaries.json");if(r.ok){const j=await r.json();BUILTIN=(j.shapes||[]).map((x,i)=>Object.assign({id:"b"+i,kind:"hood",builtin:true},x));}}}catch(_){ }
   if(!window.supabase){S.ready=true;S.err="The database library didn't load.";render();return;}
   S.sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
   const {data}=await S.sb.auth.getSession();
