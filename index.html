@@ -372,6 +372,19 @@ const ll=h=>h.lat&&h.lng?[Number(h.lat),Number(h.lng)]:GEO[h.id]||null;
 const gmap=h=>{const c=ll(h);const q=c?c[0]+","+c[1]:[h.address,h.city,"CA",h.zip].filter(Boolean).join(", ");return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q);};
 const gsat=h=>{const c=ll(h);return c?"https://www.google.com/maps/@?api=1&map_action=map&basemap=satellite&zoom=19&center="+encodeURIComponent(c[0]+","+c[1]):gmap(h);};
 function mapHomes(){return S.homes.filter(h=>ll(h)&&(focus(h)||S.showE)&&!S.hide[h.status]);}
+if(window.L&&!L.Map.SmoothWheelZoom){L.Map.mergeOptions({smoothWheelZoom:false,smoothSensitivity:1});
+L.Map.SmoothWheelZoom=L.Handler.extend({
+  addHooks:function(){L.DomEvent.on(this._map._container,"wheel",this._onWheelScroll,this);},
+  removeHooks:function(){L.DomEvent.off(this._map._container,"wheel",this._onWheelScroll,this);},
+  _onWheelScroll:function(e){if(!this._isWheeling)this._onWheelStart(e);this._onWheeling(e);},
+  _onWheelStart:function(e){const map=this._map;this._isWheeling=true;this._wheelMousePosition=map.mouseEventToContainerPoint(e);this._centerPoint=map.getSize()._divideBy(2);this._startLatLng=map.containerPointToLatLng(this._centerPoint);this._wheelStartLatLng=map.containerPointToLatLng(this._wheelMousePosition);this._moved=false;map._stop();if(map._panAnim)map._panAnim.stop();this._goalZoom=map.getZoom();this._prevCenter=map.getCenter();this._prevZoom=map.getZoom();this._zoomAnimationId=requestAnimationFrame(this._updateWheelZoom.bind(this));},
+  _onWheeling:function(e){const map=this._map;this._goalZoom=Math.max(map.getMinZoom(),Math.min(map.getMaxZoom(),this._goalZoom+L.DomEvent.getWheelDelta(e)*0.003*map.options.smoothSensitivity));this._wheelMousePosition=map.mouseEventToContainerPoint(e);clearTimeout(this._timeoutId);this._timeoutId=setTimeout(this._onWheelEnd.bind(this),180);L.DomEvent.preventDefault(e);L.DomEvent.stopPropagation(e);},
+  _onWheelEnd:function(){this._isWheeling=false;cancelAnimationFrame(this._zoomAnimationId);if(this._moved)this._map._moveEnd(true);},
+  _updateWheelZoom:function(){const map=this._map;if(!this._isWheeling)return;if(!map.getCenter().equals(this._prevCenter)||map.getZoom()!==this._prevZoom){this._isWheeling=false;return;}
+    this._zoom=Math.round((map.getZoom()+(this._goalZoom-map.getZoom())*0.3)*100)/100;const delta=this._wheelMousePosition.subtract(this._centerPoint);
+    this._center=(delta.x===0&&delta.y===0)?this._startLatLng:map.unproject(map.project(this._wheelStartLatLng,this._zoom).subtract(delta),this._zoom);
+    if(!this._moved){map._moveStart(true,false);this._moved=true;}map._move(this._center,this._zoom);this._prevCenter=map.getCenter();this._prevZoom=map.getZoom();this._zoomAnimationId=requestAnimationFrame(this._updateWheelZoom.bind(this));}
+});L.Map.addInitHook("addHandler","smoothWheelZoom",L.Map.SmoothWheelZoom);}
 let MAPN=0,MAPS=[],MAPCFG={};
 function mapSvg(hs,b,labels,opt){const k="m"+(++MAPN);MAPCFG[k]={ids:hs.map(h=>h.id),b,labels,opt:opt||{}};return `<div class="lmap ${opt&&opt.small?"sm":""}" id="${k}"></div>`;}
 function mountMaps(){
@@ -379,7 +392,7 @@ function mountMaps(){
   if(!window.L)return;
   document.querySelectorAll(".lmap").forEach(el=>{const cfg=MAPCFG[el.id];if(!cfg)return;
     const canv=(()=>{try{return !!document.createElement("canvas").getContext("2d");}catch(_){return false;}})();
-    const map=L.map(el,{zoomSnap:0.25,zoomDelta:1,wheelPxPerZoomLevel:14,wheelDebounceTime:8,zoomAnimationThreshold:8,preferCanvas:canv,attributionControl:true});MAPS.push(map);
+    const map=L.map(el,{zoomSnap:0,zoomDelta:0.75,scrollWheelZoom:false,smoothWheelZoom:true,smoothSensitivity:1.6,preferCanvas:canv,attributionControl:true});MAPS.push(map);
     const bases={"Streets":L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,keepBuffer:4,updateWhenZooming:false,attribution:"&copy; OpenStreetMap"}),
       "Gray":L.layerGroup([L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,maxNativeZoom:16,attribution:"&copy; Esri"}),L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,maxNativeZoom:16})]),
       "Satellite":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery &copy; Esri"})};
