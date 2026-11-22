@@ -189,7 +189,7 @@ let POCK=[],CITY=[];const cityAt=pt=>{const x=CITY.find(q=>pip(pt,q.pts));return
 const pocketsOf=mk=>{const g={};POCK.filter(x=>x.market===mk).forEach(x=>{g[x.name]=g[x.name]||{name:x.name,market:mk,zip:x.zip||"",label:x.label||x.name,tier:Number(((hoodMeta(mk).pt||{})[x.name])||x.tier||5),avoid:!!hoodMeta(mk).avoid||!!((hoodMeta(mk).pa||{})[x.name]),own:!!((hoodMeta(mk).pa||{})[x.name]),hs:x.hs,dist:x.dist,zip:x.zip,approx:x.approx,polys:[]};g[x.name].polys.push(x.pts);});return Object.values(g);};
 const pocketAt=pt=>{const x=POCK.find(q=>pip(pt,q.pts));return x?x.name:"";};
 const pocketObjAt=pt=>{const x=POCK.find(q=>pip(pt,q.pts));return x?pocketsOf(x.market).find(p=>p.name===x.name):null;};
-const NEWPREM=1.22,MINS=5,SALEDAYS=183;
+const NEWPREM=1.20,ZIPPREM=1.22,MINS=5,SALEDAYS=183;
 function parseCsv(t){const rows=[];let cur=[],f="",q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;}else if(ch==='"')q=true;else if(ch===","){cur.push(f);f="";}else if(ch==="\n"){cur.push(f.replace(/\r$/,""));rows.push(cur);cur=[];f="";}else f+=ch;}if(f||cur.length){cur.push(f.replace(/\r$/,""));rows.push(cur);}return rows;}
 function saleDate(d){if(!d)return null;const t=Date.parse(String(d).replace(/-/g," "));return isNaN(t)?null:new Date(t);}
 let SALEC=null,SALEK="";
@@ -238,7 +238,7 @@ async function geocode(q){
   const a=j[0].address||{};return {lat:+(+j[0].lat).toFixed(6),lng:+(+j[0].lon).toFixed(6),zip:String(a.postcode||"").slice(0,5),city:a.city||a.town||a.village||a.municipality||a.hamlet||"",county:a.county||"",road:[a.house_number,a.road].filter(Boolean).join(" "),label:j[0].display_name||q};}
 function compPsf(c){const p=n(c.price),sf=n(c.sf);if(!p||!sf)return null;return p/sf*Math.pow(MX_SF/sf,ELAST)*(1+(Number(c.adj)||0)/100);}
 function mktStats(mk){const polys=BUILTIN.filter(x=>x.name===mk).map(x=>x.pts);if(!polys.length)return null;const cs=veevSold(polys);if(!cs.length)return null;const v=cs.map(h=>n(h.sale)/MX_SF);const avg=v.reduce((a,b)=>a+b,0)/v.length;return {n:cs.length,avg,raw:avg,lo:Math.min(...v),hi:Math.max(...v),val:avg*MX_SF};}
-function zipModel(zip){const zs=S.areas.filter(a=>(a.zips||[]).includes(String(zip))&&n(a.model));return zs.length?zs.reduce((t,a)=>t+n(a.model),0)/zs.length:null;}
+function zipModel(zip){const zs=S.areas.filter(a=>(a.zips||[]).includes(String(zip))&&n(a.model));return zs.length?zs.reduce((t,a)=>t+n(a.model),0)/zs.length*NEWPREM/ZIPPREM:null;}
 const r10=v=>Math.round(v/1e4)*1e4;const MINC=3;
 function mktZipModel(mk){const b=BUILTIN.filter(x=>x.name===mk);const zs=[...new Set([].concat(...b.map(x=>x.zips||[])))].map(zipModel).filter(Boolean);return zs.length?zs.reduce((a,c)=>a+c,0)/zs.length:null;}
 const hoodMeta=name=>S.hoods.find(x=>x.id===slug(name))||{};
