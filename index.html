@@ -461,6 +461,7 @@ L.Map.SmoothWheelZoom=L.Handler.extend({
 });L.Map.addInitHook("addHandler","smoothWheelZoom",L.Map.SmoothWheelZoom);}
 let MAPN=0,MAPS=[],MAPCFG={};
 function mapSvg(hs,b,labels,opt){const k="m"+(++MAPN);MAPCFG[k]={ids:hs.map(h=>h.id),b,labels,opt:opt||{}};return `<div class="lmap ${opt&&opt.small?"sm":""}" id="${k}"></div>`;}
+let MAPVIEW={};
 function mountMaps(){
   document.querySelectorAll(".side").forEach(sd=>{const mb=sd.querySelector(":scope > .mapbox");if(!mb)return;const lg=sd.querySelector(":scope > .filters");if(lg)sd.insertBefore(lg,mb);let after=mb;sd.querySelectorAll(":scope > .found:not(.top)").forEach(f=>{after.after(f);after=f;});});
   MAPS.forEach(m=>{try{m.remove();}catch(_){ }});MAPS=[];
@@ -510,6 +511,10 @@ function mountMaps(){
     place();
     setTimeout(()=>{try{declutter(map);}catch(_){ }},60);map.on("zoomend moveend",()=>{try{declutter(map);}catch(_){ }});
     if(cfg.opt.find&&S.found&&S.found.lat){const F=S.found;L.circleMarker([F.lat,F.lng],{radius:11,color:"#000",weight:3,fillColor:"#FFEB3B",fillOpacity:.95}).addTo(map).bindTooltip(esc(F.road||F.q),{className:"pinlab",permanent:true,direction:"top",offset:[0,-10]});map.setView([F.lat,F.lng],15);}
+    if(!cfg.opt.small){const vk=[route(),[...document.querySelectorAll(".lmap")].indexOf(el),cfg.opt.city||"",cfg.opt.pockets||"",JSON.stringify(cfg.opt.focus||""),S.region||"",S.mapView||"",S.found&&S.found.lat?S.found.lat+","+S.found.lng:""].join("|");
+      const sv=MAPVIEW[vk];if(sv){try{map.setView(sv.c,sv.z,{animate:false});}catch(_){ }}
+      setTimeout(()=>{map.on("moveend",()=>{try{MAPVIEW[vk]={c:map.getCenter(),z:map.getZoom()};}catch(_){ }});},250);
+      const RC=L.Control.extend({options:{position:"topleft"},onAdd(){const d=L.DomUtil.create("div","leaflet-bar");const a=L.DomUtil.create("a","",d);a.href="#";a.title="Reset map";a.innerHTML="&#8634;";a.style.fontSize="18px";a.setAttribute("role","button");a.setAttribute("aria-label","Reset map");L.DomEvent.on(a,"click",ev=>{L.DomEvent.stop(ev);delete MAPVIEW[vk];render();});return d;}});map.addControl(new RC());}
   });}
 function shapeForm(){const x=S.newShape?{name:"",kind:"hood",tier:3,note:"",city:S.newShape.city}:S.shapes.find(q=>q.id===S.shape);if(!x)return "";
   return `<h2>${S.newShape?"New boundary":"Boundary: "+esc(x.name||"")}</h2><form class="grid" id="shapeForm" data-id="${esc(S.newShape?"":x.id)}"><label class="wide">Name<input id="s-name" name="name" value="${esc(x.name||"")}" required></label><label>Type<select id="s-kind" name="kind"><option value="hood" ${x.kind!=="school"&&x.kind!=="avoid"?"selected":""}>Neighborhood</option><option value="school" ${x.kind==="school"?"selected":""}>School zone</option><option value="avoid" ${x.kind==="avoid"?"selected":""}>Avoid area (red)</option></select></label><label>Value tier 1 (top) to 6<select id="s-tier" name="tier">${[1,2,3,4,5,6].map(t=>`<option ${Number(x.tier)===t?"selected":""}>${t}</option>`).join("")}</select></label><label class="wide">Note<input id="s-note" name="note" value="${esc(x.note||"")}" placeholder="Schools, $/sf read, what changes at this line"></label><div class="wide bar"><button class="btn sm" type="submit">Save boundary</button><button class="btn ghost sm" type="button" data-act="shape-cancel">${S.newShape?"Discard":"Close"}</button>${S.newShape?"":`<button class="btn ghost sm" type="button" data-act="del-shape" data-id="${esc(x.id)}">Delete</button>`}</div></form>`;}
