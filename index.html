@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="shortcut icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#2B2B2B">
 <meta property="og:type" content="website">
@@ -130,6 +132,10 @@ details .tw{border-top:1px solid var(--sand)}
 .mapbox{max-width:none}
 .split{grid-template-columns:minmax(0,1fr) minmax(400px,44%)}
 .lmap.sm{height:300px;min-height:0}
+@media(min-width:901px){.split .tw table{min-width:0}.split th{white-space:normal}}
+.msearch{display:flex;gap:6px;margin-bottom:8px}.msearch input{flex:1;min-width:0}
+.found{background:#fff;border:1px solid var(--sand);border-left:4px solid var(--charcoal);padding:10px 12px;margin-bottom:8px;font-size:13px}
+.found dl{grid-template-columns:1fr;margin:6px 0}.found .big{font-size:20px;font-weight:700}
 .shp{background:transparent;border:0;box-shadow:none;font:600 11px "Instrument Sans",sans-serif;color:#2B2B2B;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff}
 .pinlab{background:#fff;border:1px solid #2B2B2B;border-radius:0;box-shadow:none;font:500 11px "Instrument Sans",sans-serif;padding:1px 4px}
 .login{max-width:340px;margin:60px auto}
@@ -165,7 +171,39 @@ function stage(h){const b=h.build||{},d=h.bd||{};let last="",next="";for(const [
 const chans=h=>CH.filter(c=>(h.ch||{})[c[0]]).map(c=>c[1]).join(", ");
 const SUPA_URL="https://ewtpfifjfbhjqelywnpm.supabase.co",SUPA_KEY="sb_publishable_dcO-Mn03vWxXZurRfK2LOQ_3T2Sq9AQ";
 const TIER={1:"#1F6B2B",2:"#3F8F4A",3:"#7FC489",4:"#B9E8BE",5:"#DFEAE0",6:"#EDEEEA"};
-const S={shapes:[],shape:"",newShape:null,base:"Streets",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
+const MARKETS=["Willow Glen","Cambrian","Blossom Valley","Santa Teresa","Almaden","Evergreen","West San Jose"];
+const ZIPMKT={"95125":"Willow Glen","95124":"Cambrian","95118":"Blossom Valley","95123":"Blossom Valley","95136":"Blossom Valley","95119":"Santa Teresa","95139":"Santa Teresa","95120":"Almaden","95121":"Evergreen","95148":"Evergreen","95135":"Evergreen","95138":"Evergreen","95129":"West San Jose","95130":"West San Jose","95117":"West San Jose","95128":"West San Jose"};
+const CCOL={Sold:"#D93025",Active:"#1FA64A",Pending:"#F2A900",Watch:"#9AA0A6"};
+const STARTER=[["Willow Glen",2,[[37.317,-121.915],[37.318,-121.893],[37.305,-121.876],[37.285,-121.868],[37.268,-121.872],[37.270,-121.905],[37.285,-121.920],[37.300,-121.922]]],
+["Cambrian",3,[[37.277,-121.945],[37.277,-121.906],[37.262,-121.900],[37.245,-121.905],[37.235,-121.925],[37.238,-121.950],[37.255,-121.953]]],
+["Blossom Valley",4,[[37.268,-121.898],[37.268,-121.872],[37.270,-121.835],[37.250,-121.815],[37.232,-121.815],[37.228,-121.850],[37.235,-121.880],[37.245,-121.903]]],
+["Santa Teresa",4,[[37.250,-121.815],[37.248,-121.785],[37.235,-121.765],[37.215,-121.755],[37.205,-121.790],[37.215,-121.815],[37.232,-121.815]]],
+["Almaden",2,[[37.245,-121.903],[37.235,-121.880],[37.228,-121.850],[37.215,-121.835],[37.190,-121.820],[37.175,-121.840],[37.190,-121.880],[37.215,-121.905],[37.235,-121.925]]],
+["Evergreen",4,[[37.345,-121.800],[37.345,-121.770],[37.320,-121.745],[37.290,-121.740],[37.270,-121.755],[37.285,-121.800],[37.300,-121.820],[37.325,-121.825]]],
+["West San Jose",2,[[37.325,-122.015],[37.330,-121.975],[37.330,-121.935],[37.305,-121.930],[37.290,-121.950],[37.285,-121.985],[37.290,-122.010],[37.305,-122.020]]]];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[0]>pt[0])!==(b[0]>pt[0]))&&(pt[1]<(b[1]-a[1])*(pt[0]-a[0])/(b[0]-a[0])+a[1]))c=!c;}return c;}
+function shapesAt(pt,kind){return S.shapes.filter(x=>(x.pts||[]).length>2&&(!kind||(x.kind||"hood")===kind)&&pip(pt,x.pts));}
+function marketOf(g){const pt=[g.lat,g.lng];const mine=shapesAt(pt,"hood");const own=mine.find(x=>!x.starter);if(own)return own.name;if(ZIPMKT[g.zip])return ZIPMKT[g.zip];if(mine[0])return mine[0].name;return g.city||"Other";}
+function regionOf(g){const c=String(g.county||"");return /Santa Clara/i.test(c)?"South Bay":/Alameda|Contra Costa/i.test(c)?"East Bay":/San Mateo/i.test(c)?"Peninsula":"South Bay";}
+async function geocode(q){
+  const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=us&viewbox=-122.65,38.15,-121.45,36.95&bounded=1&q="+encodeURIComponent(q);
+  const r=await fetch(u,{headers:{Accept:"application/json"}});if(!r.ok)throw new Error("Address lookup returned "+r.status);const j=await r.json();if(!j.length)return null;
+  const a=j[0].address||{};return {lat:+(+j[0].lat).toFixed(6),lng:+(+j[0].lon).toFixed(6),zip:String(a.postcode||"").slice(0,5),city:a.city||a.town||a.village||a.municipality||a.hamlet||"",county:a.county||"",road:[a.house_number,a.road].filter(Boolean).join(" "),label:j[0].display_name||q};}
+function compPsf(c){const p=n(c.price),sf=n(c.sf);if(!p||!sf)return null;return p/sf*Math.pow(MX_SF/sf,ELAST)*(1+(Number(c.adj)||0)/100);}
+function mktStats(mk){const cs=S.comps.filter(c=>c.hood===mk&&c.status==="Sold"&&compPsf(c));if(!cs.length)return null;const v=cs.map(compPsf);const avg=v.reduce((a,b)=>a+b,0)/v.length;return {n:cs.length,avg,raw:cs.reduce((a,c)=>a+n(c.price)/n(c.sf),0)/cs.length,lo:Math.min(...v),hi:Math.max(...v),val:avg*MX_SF};}
+function zipModel(zip){const zs=S.areas.filter(a=>(a.zips||[]).includes(String(zip))&&n(a.model));return zs.length?zs.reduce((t,a)=>t+n(a.model),0)/zs.length:null;}
+const r10=v=>Math.round(v/1e4)*1e4;
+function searchBox(){const F=S.found;let o=`<form class="msearch" id="searchForm"><input id="q-addr" name="q" placeholder="Search an address, e.g. 1234 Booksin Ave" value="${esc(F&&F.q||"")}"><button class="btn sm" type="submit">Find</button></form>`;
+  if(!F)return o;if(F.busy)return o+`<div class="found">Looking up the address…</div>`;if(F.err)return o+`<div class="found">${esc(F.err)} <button class="btn ghost sm" data-act="found-clear">Clear</button></div>`;
+  const st=mktStats(F.market),zm=zipModel(F.zip);const subs=S.areas.filter(a=>(a.zips||[]).includes(F.zip));const mine=shapesAt([F.lat,F.lng]);
+  o+=`<div class="found"><b>${esc(F.road||F.q)}</b><div class="sub">${esc([F.city,F.zip].filter(Boolean).join(" "))} · ${esc(F.region)}</div><dl>${row("Market group",`<b>${esc(F.market)}</b>`)}`+
+    row("Model X estimate",(st?`<span class="big num">${full(r10(st.val))}</span><span class="sm">from ${st.n} sold comp${st.n>1?"s":""} in ${esc(F.market)} at $${Math.round(st.avg).toLocaleString()}/sf adjusted</span>`:`<span class="mute">No sold comps logged for ${esc(F.market)} yet.</span>`)+(zm?`<span class="sm">ZIP model for ${esc(F.zip)}: ${full(r10(zm))}</span>`:""),1)+
+    (subs.length?row("Sub-neighborhoods in this ZIP",subs.map(a=>`<div><b>${esc(a.name)}</b> · tier ${esc(a.tier)}<span class="sm">${esc(a.schools||"")}</span></div>`).join(""),1):"")+
+    (mine.length?row("Inside your boundaries",esc(mine.map(x=>x.name+(x.kind==="school"?" (school zone)":"")+(x.starter?" (approx.)":"")).join(", ")),1):"")+
+    `</dl><div class="sm">Schools here are the candidates for the ZIP. Confirm the exact assignment on the district locator.</div><div class="bar"><button class="btn sm" data-act="found-lot">Add as a lot</button><button class="btn ghost sm" data-act="found-comp">Add as a comp</button><a class="btn ghost sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(F.lat+","+F.lng)}" target="_blank" rel="noopener">Google Maps</a><button class="btn ghost sm" data-act="found-clear">Clear</button></div></div>`;
+  return o;}
+const S={found:null,compEdit:"",compPre:null,shapes:[],shape:"",newShape:null,base:"Streets",bRegion:"",bCity:"",bTab:"inv",mapView:"bay",hide:{},showE:false,pin:"",homes:[],notes:[],comps:[],ready:false,db:null,err:"",region:"South Bay",edit:false,escEdit:false,addComp:false,addHome:false,eOpen:false,areas:[],city:"San Jose",area:"",addArea:false,msg:""};
 if(S.region==="North Bay")S.region="South Bay";
 try{const r=localStorage.getItem("veev_region");if(r)S.region=r;}catch(e){}
 const $=id=>document.getElementById(id);
@@ -255,7 +293,7 @@ function viewDashboard(){
   const mk=sortHomes(hs.filter(h=>h.status==="Listed"||h.status==="Pulled")),es=hs.filter(h=>h.status==="Sold");
   const top=`<h2>On the market <small>${mk.length} homes</small></h2>`+homeTable(mk,false)+`<h2>In escrow <small>${es.length} homes</small></h2>`+(es.length?homeTable(es,false):`<div class="quiet">Nothing in escrow.</div>`);
   const i=o.indexOf("<h2>Work queue");
-  return `<div class="split"><div>${o.slice(0,i)+top+o.slice(i)}</div><div class="side"><div class="mapbox">${mapSvg(mapHomes().filter(h=>S.region==="All"||!S.region||h.region===S.region),S.region==="East Bay"?RB["East Bay"]:S.region==="South Bay"?RB["South Bay"]:VIEWS.bay,false)}</div>${legend()}</div></div>`;
+  return `<div class="split"><div>${o.slice(0,i)+top+o.slice(i)}</div><div class="side">${searchBox()}<div class="mapbox">${mapSvg(mapHomes().filter(h=>S.region==="All"||!S.region||h.region===S.region),S.region==="East Bay"?RB["East Bay"]:S.region==="South Bay"?RB["South Bay"]:VIEWS.bay,false,{shapes:true,find:true})}</div>${legend()}</div></div>`;
 }
 function eTable(es){return `<div class="tw"><table><tr><th>Home</th><th>Status</th><th class="r">Sale price</th><th class="r">$/sf</th><th>Sold</th><th class="r">Lot</th><th>Notes</th></tr>`+es.map(h=>{const p=n(h.sale)||n(h.list),sf=n(h.sf);return `<tr data-go="home-${esc(h.id)}"><td><b>${esc(h.address)}</b><span class="sm">${esc([h.city,h.zip].filter(Boolean).join(" "))}${h.hood?" · "+esc(h.hood):""}</span></td><td><span class="st ${esc(h.status)}">${esc(h.status)}</span></td><td class="r num"><b>${m(p)}</b>${!n(h.sale)&&n(h.list)?`<span class="sm">list</span>`:""}</td><td class="r num">${p&&sf?"$"+Math.round(p/sf).toLocaleString():"–"}</td><td class="num">${fd(h.saleDate)}</td><td class="r num">${h.lot?Number(h.lot).toLocaleString():"–"}</td><td><span class="sm">${esc(h.flags||"")}</span></td></tr>`;}).join("")+`</table></div>`;}
 function viewHomes(){
@@ -306,15 +344,17 @@ function mountMaps(){
       "Satellite":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery &copy; Esri"})};
     (bases[S.base]||bases.Streets).addTo(map);L.control.layers(bases,null,{collapsed:true,position:"topright"}).addTo(map);map.attributionControl.setPrefix(false);
     map.on("baselayerchange",e=>{S.base=e.name;try{localStorage.setItem("veev_base3",e.name);}catch(_){ }});
-    const b=cfg.b;const pts=cfg.ids.map(homeById).filter(Boolean).map(ll).filter(Boolean);
+    const b=cfg.b;const cps=(cfg.opt.comps||[]).map(id=>S.comps.find(c=>c.id===id)).filter(c=>c&&c.lat&&c.lng);
+    const pts=cfg.ids.map(homeById).filter(Boolean).map(ll).filter(Boolean).concat(cps.map(c=>[Number(c.lat),Number(c.lng)]));
     if(pts.length&&!cfg.opt.small)map.fitBounds(L.latLngBounds(pts),{padding:[36,36],maxZoom:15});else map.fitBounds([[b.s,b.w],[b.n,b.e]]);
     const rad=x=>{const z=map.getZoom();return (z<10?3:z<11?4:z<12?5:z<13.5?6:8)-(x?0:1.5);};const marks=[];
-    map.on("zoomend",()=>marks.forEach(([mk,x])=>mk.setRadius(rad(x))));
+    const place=()=>{const used=[];marks.forEach(([mk,x,c])=>{const r=rad(x),b=map.latLngToContainerPoint(c);let p=b,k=0;while(k<30&&used.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<r*1.8)){k++;const ang=k*2.4,d=r*1.3*Math.sqrt(k);p=L.point(b.x+Math.cos(ang)*d,b.y+Math.sin(ang)*d);}used.push(p);mk.setLatLng(k?map.containerPointToLatLng(p):c);mk.setRadius(r);});};
+    map.on("zoomend",place);
     if(cfg.opt.shapes){S.shapes.filter(x=>!cfg.opt.city||x.city===cfg.opt.city).forEach(x=>{if(!(x.pts||[]).length)return;
         const school=x.kind==="school";const pg=L.polygon(x.pts,school?{color:"#2B2B2B",weight:2.5,dashArray:"6 5",fill:false}:{color:"#2B2B2B",weight:1,fillColor:TIER[x.tier]||TIER[5],fillOpacity:0.45}).addTo(map);
         pg._sid=x.id;pg.bindTooltip(esc(x.name||""),{permanent:true,direction:"center",className:"shp"});
         pg.on("click",()=>{if(map.pm&&(map.pm.globalDrawModeEnabled()||map.pm.globalEditModeEnabled()||map.pm.globalRemovalModeEnabled()))return;S.shape=x.id;S.newShape=null;render();});
-        pg.on("pm:edit",async e=>{try{await S.db.doc("shapes/"+x.id).update({pts:e.layer.getLatLngs()[0].map(q=>[+q.lat.toFixed(6),+q.lng.toFixed(6)])});}catch(err){fail(err);}});});
+        pg.on("pm:edit",async e=>{try{await S.db.doc("shapes/"+x.id).update({starter:false,pts:e.layer.getLatLngs()[0].map(q=>[+q.lat.toFixed(6),+q.lng.toFixed(6)])});}catch(err){fail(err);}});});
       if(map.pm&&cfg.opt.draw){map.pm.addControls({position:"topleft",drawMarker:false,drawCircleMarker:false,drawPolyline:false,drawRectangle:false,drawCircle:false,drawText:false,cutPolygon:false,rotateMode:false,dragMode:false,drawPolygon:true,editMode:true,removalMode:true});
         map.on("pm:create",e=>{const pts=e.layer.getLatLngs()[0].map(q=>[+q.lat.toFixed(6),+q.lng.toFixed(6)]);e.layer.remove();S.newShape={pts,city:cfg.opt.city||""};S.shape="";render();const f=$("s-name");if(f)f.focus();});
         map.on("pm:remove",async e=>{if(e.layer._sid){try{await S.db.doc("shapes/"+e.layer._sid).delete();}catch(err){fail(err);}}});}
@@ -323,7 +363,12 @@ function mountMaps(){
     hs.forEach(h=>{const c=ll(h);if(!c)return;const x=focus(h);
       const mk=L.circleMarker(c,{radius:rad(x),color:"#fff",weight:x?1.5:1,fillColor:COL[h.status]||"#9AA0A6",fillOpacity:1,opacity:1}).addTo(map);
       mk.bindTooltip(esc(String(h.address).replace(/ \(.*\)/,""))+" · "+esc(h.status==="Sold"?"In escrow":h.status)+(price(h)?" · "+m(price(h)):""),{className:"pinlab",direction:"top",offset:[0,-6],permanent:!!cfg.labels&&x});
-      marks.push([mk,x]);mk.on("click",()=>{location.hash="home-"+h.id;});});
+      marks.push([mk,x,L.latLng(c)]);mk.on("click",()=>{location.hash="home-"+h.id;});});
+    cps.forEach(c=>{const ps=compPsf(c);const mk=L.circleMarker([Number(c.lat),Number(c.lng)],{radius:6,color:"#2B2B2B",weight:2,fillColor:CCOL[c.status]||"#9AA0A6",fillOpacity:1}).addTo(map);
+      mk.bindTooltip(esc(c.address)+(n(c.price)&&n(c.sf)?" · $"+Math.round(n(c.price)/n(c.sf)).toLocaleString()+"/sf":"")+(ps?" · adj $"+Math.round(ps).toLocaleString():""),{className:"pinlab",direction:"top",offset:[0,-6]});
+      mk.on("click",()=>{S.compEdit=c.id;S.addComp=false;S.compPre=null;if(route()!=="comps")location.hash="comps";else render();});});
+    place();
+    if(cfg.opt.find&&S.found&&S.found.lat){const F=S.found;L.circleMarker([F.lat,F.lng],{radius:11,color:"#000",weight:3,fillColor:"#FFEB3B",fillOpacity:.95}).addTo(map).bindTooltip(esc(F.road||F.q),{className:"pinlab",permanent:true,direction:"top",offset:[0,-10]});map.setView([F.lat,F.lng],15);}
   });}
 function shapeForm(){const x=S.newShape?{name:"",kind:"hood",tier:3,note:"",city:S.newShape.city}:S.shapes.find(q=>q.id===S.shape);if(!x)return "";
   return `<h2>${S.newShape?"New boundary":"Boundary: "+esc(x.name||"")}</h2><form class="grid" id="shapeForm" data-id="${esc(S.newShape?"":x.id)}"><label class="wide">Name<input id="s-name" name="name" value="${esc(x.name||"")}" required></label><label>Type<select id="s-kind" name="kind"><option value="hood" ${x.kind!=="school"?"selected":""}>Neighborhood</option><option value="school" ${x.kind==="school"?"selected":""}>School zone</option></select></label><label>Value tier 1 (top) to 6<select id="s-tier" name="tier">${[1,2,3,4,5,6].map(t=>`<option ${Number(x.tier)===t?"selected":""}>${t}</option>`).join("")}</select></label><label class="wide">Note<input id="s-note" name="note" value="${esc(x.note||"")}" placeholder="Schools, $/sf read, what changes at this line"></label><div class="wide bar"><button class="btn sm" type="submit">Save boundary</button><button class="btn ghost sm" type="button" data-act="shape-cancel">${S.newShape?"Discard":"Close"}</button>${S.newShape?"":`<button class="btn ghost sm" type="button" data-act="del-shape" data-id="${esc(x.id)}">Delete</button>`}</div></form>`;}
@@ -353,14 +398,16 @@ function viewBrowse(){
     o+=`<div class="filters">${[["inv","Inventory"],["sold","Sold comps"],["hoods","Neighborhoods"]].map(([k,l])=>`<button class="chipbtn ${T===k?"on":""}" data-b="t:${k}">${l}</button>`).join("")}</div>`;
     if(T==="hoods"){S.city=C;const cb=cityBounds(C)||RB[R];const mine=S.shapes.filter(x=>x.city===C);
       const list=`<h2>Your boundaries <small>${mine.length} drawn in ${esc(C)}</small></h2>`+(mine.length?`<div class="tw"><table style="min-width:0"><tr><th>Name</th><th>Type</th><th>Tier</th><th>Note</th></tr>`+mine.map(x=>`<tr data-shape="${esc(x.id)}" style="cursor:pointer"><td><b>${esc(x.name)}</b></td><td>${x.kind==="school"?"School zone":"Neighborhood"}</td><td>${x.kind==="school"?"–":`<i class="st t${esc(x.tier)}" style="font-style:normal">${esc(x.tier)}</i>`}</td><td>${esc(x.note||"")}</td></tr>`).join("")+`</table></div>`:`<div class="quiet">None yet. Use the polygon tool at the top left of the map: click each corner, then click the first point to close it. Name it and pick neighborhood or school zone.</div>`);
-      return o+`<div class="split"><div>${shapeForm()}${list}${viewAreas()}</div><div class="side"><div class="mapbox">${mapSvg(mapHomes().filter(h=>h.city===C),cb,false,{shapes:true,draw:true,city:C})}</div>${legend()}<div class="quiet">Solid fill is a neighborhood, colored by value tier. Dashed outline is a school zone. Switch to Satellite at the top right.</div></div></div>`;}
+      const need=C==="San Jose"&&STARTER.some(q=>!S.shapes.some(x=>x.name===q[0]));
+      const starter=need?`<div class="bar"><button class="btn sm" data-act="starter">Add starter boundaries for the 7 San Jose markets</button><span class="quiet" style="margin:0">Approximate shapes. Use the edit tool on the map to drag corners.</span></div>`:"";
+      return o+`<div class="split"><div>${shapeForm()}${starter}${list}${viewAreas()}</div><div class="side">${searchBox()}<div class="mapbox">${mapSvg(mapHomes().filter(h=>h.city===C),cb,false,{shapes:true,draw:true,find:true,city:C})}</div>${legend()}<div class="quiet">Solid fill is a neighborhood, colored by value tier. Dashed outline is a school zone. Switch to Satellite at the top right.</div></div></div>`;}
     if(T==="sold"){const cl=sortHomes(hs.filter(h=>h.status==="Closed")),es=S.homes.filter(h=>!focus(h)&&h.city===C).sort((a,b)=>(n(b.sale)||0)-(n(a.sale)||0));
       left=`<h2>Model X closed in ${esc(C)}</h2>`+(cl.length?eTable(cl):`<div class="quiet">None yet.</div>`)+(es.length?`<h2>Model E in ${esc(C)} <small>${es.length} homes</small></h2>`+eTable(es):"")+(C==="San Jose"?`<h2>Outside comps <small>add more from the Comps tab</small></h2>`+compTable([...S.comps].sort((a,b)=>(b.date||"").localeCompare(a.date||""))):"");}
     else{const inv=sortHomes(hs.filter(h=>h.status!=="Closed"));const g=(l,a)=>`<h2>${l} <small>${a.length} homes</small></h2>`+(a.length?homeTable(a,false):`<div class="quiet">None.</div>`);
       left=g("On the market",inv.filter(h=>h.status==="Listed"||h.status==="Pulled"))+g("In escrow",inv.filter(h=>h.status==="Sold"))+g("Coming",inv.filter(h=>h.status==="Planned"||h.status==="Built"))+`<div class="bar"><button class="btn sm" data-act="add-home">${S.addHome?"Close":"Add a lot or home"}</button><span class="msg">${esc(S.msg)}</span></div>`+(S.addHome?homeForm():"");}
   }
   const shown=mapHomes().filter(h=>(!R||h.region===R)&&(!C||h.city===C));
-  return o+`<div class="split"><div>${left}</div><div class="side"><div class="mapbox">${mapSvg(C&&T==="sold"?S.homes.filter(h=>ll(h)&&h.city===C&&!S.hide[h.status]&&(h.status==="Closed"||!focus(h))):shown,b,lab)}</div>${legend()}<div class="quiet">Tap a pin to open that home.</div></div></div>`;
+  return o+`<div class="split"><div>${left}</div><div class="side">${searchBox()}<div class="mapbox">${mapSvg(C&&T==="sold"?S.homes.filter(h=>ll(h)&&h.city===C&&!S.hide[h.status]&&(h.status==="Closed"||!focus(h))):shown,b,lab,{shapes:true,find:true,city:C})}</div>${legend()}<div class="quiet">Tap a pin to open that home.</div></div></div>`;
 }
 function homeForm(){return `<form class="grid" id="homeForm"><label class="wide">Address<input id="h-address" name="address" required></label><label>City<input id="h-city" name="city" value="${esc(S.bCity||"San Jose")}"></label><label>Region<select id="h-region" name="region">${Object.keys(RB).map(r=>`<option ${S.bRegion===r?"selected":""}>${r}</option>`).join("")}</select></label><label>Neighborhood<input id="h-hood" name="hood"></label><label>ZIP<input id="h-zip" name="zip" inputmode="numeric"></label><label>Model<select id="h-plan" name="plan"><option>X</option><option>Z</option><option>E</option></select></label><label>Elevation<input id="h-elv" name="elv" placeholder="Contemporary-S"></label><label>Status<select id="h-status" name="status"><option>Planned</option><option>Listed</option><option>Sold</option><option>Closed</option></select></label><label>Lot price<input id="h-acq" name="acq" inputmode="numeric"></label><label>Acquired<input id="h-acqDate" name="acqDate" type="date"></label><label>Lot sf<input id="h-lot" name="lot" inputmode="numeric"></label><label>Green Folder<input id="h-gf" name="gf" inputmode="numeric"></label><label>AOP<input id="h-aop" name="aop" inputmode="numeric"></label><label>Home complete<input id="h-hc" name="hc" type="date"></label><div class="wide"><button class="btn" type="submit">Save home</button></div></form>`;}
 function viewPge(){
@@ -414,14 +461,19 @@ function viewHome(id){
   return o;
 }
 function compTable(cs){if(!cs.length)return `<div class="quiet">None yet. Add one from the Comps tab.</div>`;
-  return `<div class="tw"><table><tr><th>Address</th><th>Builder</th><th>Status</th><th>Date</th><th class="r">Price</th><th class="r">SF</th><th class="r">$/sf</th><th class="r">At 3,046 sf</th><th></th></tr>`+cs.map(c=>{const p=n(c.price),sf=n(c.sf),eq=mxEq(c),h=c.near&&homeById(c.near);
-    return `<tr><td><b>${esc(c.address)}</b><span class="sm">${esc(c.hood||"")}${h?` · near <a href="#home-${esc(h.id)}">${esc(h.address)}</a>`:""}${c.note?" · "+esc(c.note):""}</span></td><td>${esc(c.builder||"–")}</td><td><span class="st ${c.status==="Sold"?"Sold":c.status==="Active"?"Listed":"Planned"}">${esc(c.status||"")}</span></td><td class="num">${fd(c.date)}${c.dom?`<span class="sm">${esc(c.dom)} days</span>`:""}</td><td class="r num"><b>${m(p)}</b></td><td class="r num">${sf?sf.toLocaleString():"–"}</td><td class="r num">${p&&sf?"$"+Math.round(p/sf).toLocaleString():"–"}</td><td class="r num">${eq?m(Math.round(eq/1e4)*1e4):"–"}</td><td><button class="x" data-act="del-comp" data-id="${esc(c.id)}" aria-label="Delete comp">×</button></td></tr>`;}).join("")+`</table></div>`;}
+  return `<div class="tw"><table><tr><th>Address</th><th>Market</th><th>Status</th><th class="r">Price</th><th class="r">SF</th><th class="r">$/sf</th><th class="r">Your adj.</th><th class="r">Model X $/sf</th><th></th></tr>`+cs.map(c=>{const p=n(c.price),sf=n(c.sf),ps=compPsf(c),h=c.near&&homeById(c.near),a=Number(c.adj)||0;
+    return `<tr data-comp="${esc(c.id)}" style="cursor:pointer"><td><b>${esc(c.address)}</b><span class="sm">${esc(c.builder||"")}${c.date?" · "+fd(c.date):""}${c.dom?" · "+esc(c.dom)+" days":""}${h?` · near <a href="#home-${esc(h.id)}">${esc(h.address)}</a>`:""}${c.note?" · "+esc(c.note):""}${c.lat?"":" · not on map"}</span></td><td>${esc(c.hood||"–")}</td><td><span class="sw" style="background:${CCOL[c.status]||"#9AA0A6"}"></span>${esc(c.status||"")}</td><td class="r num"><b>${m(p)}</b></td><td class="r num">${sf?sf.toLocaleString():"–"}</td><td class="r num">${p&&sf?"$"+Math.round(p/sf).toLocaleString():"–"}</td><td class="r num">${a?(a>0?"+":"")+a+"%":"0%"}<span class="sm">${esc(c.adjWhy||"")}</span></td><td class="r num"><b>${ps?"$"+Math.round(ps).toLocaleString():"–"}</b></td><td><button class="x" data-act="del-comp" data-id="${esc(c.id)}" aria-label="Delete comp">×</button></td></tr>`;}).join("")+`</table></div>`;}
+function compForm(c,id){const hs=[...S.homes].filter(focus).sort((a,b)=>a.address.localeCompare(b.address));const mk=MARKETS.includes(c.hood)||!c.hood?MARKETS:[c.hood,...MARKETS];
+  return `<form class="grid" id="compForm" data-id="${esc(id||"")}"><label class="wide">Address<input id="c-address" name="address" value="${esc(c.address||"")}" required></label><label>Market<select id="c-hood" name="hood">${mk.concat(["Other"]).map(x=>`<option ${c.hood===x?"selected":""}>${esc(x)}</option>`).join("")}</select></label><label>Status<select id="c-status" name="status">${["Sold","Active","Pending","Watch"].map(x=>`<option ${c.status===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Price<input id="c-price" name="price" inputmode="numeric" value="${esc(c.price||"")}"></label><label>Square feet<input id="c-sf" name="sf" inputmode="numeric" value="${esc(c.sf||"")}"></label><label>Adjustment %<input id="c-adj" name="adj" inputmode="decimal" placeholder="-8 or 5" value="${esc(c.adj||"")}"></label><label class="wide">Why the adjustment<input id="c-adjWhy" name="adjWhy" placeholder="Boutique finishes, large lot, older build, busy street…" value="${esc(c.adjWhy||"")}"></label><label>Builder or type<input id="c-builder" name="builder" placeholder="Thomas James, resale…" value="${esc(c.builder||"")}"></label><label>Lot sf<input id="c-lot" name="lot" inputmode="numeric" value="${esc(c.lot||"")}"></label><label>Date<input id="c-date" name="date" type="date" value="${esc(c.date||"")}"></label><label>Days on market<input id="c-dom" name="dom" inputmode="numeric" value="${esc(c.dom||"")}"></label><label>Near which home<select id="c-near" name="near"><option value="">None</option>${hs.map(h=>`<option value="${esc(h.id)}" ${c.near===h.id?"selected":""}>${esc(h.address)}</option>`).join("")}</select></label><label class="wide">Note<textarea id="c-note" name="note" placeholder="What you saw from the street">${esc(c.note||"")}</textarea></label><div class="wide quiet" style="margin:0">Adjustment moves the comp to a Model X equivalent. Use a negative number when the comp is better than a Model X (boutique finishes, bigger lot) and a positive number when it is worse. Size is already adjusted to 3,046 sf automatically.</div><div class="wide bar"><button class="btn" type="submit">${id?"Save changes":"Save comp"}</button><button class="btn ghost sm" type="button" data-act="comp-cancel">Cancel</button></div></form>`;}
 function viewComps(){
-  const cs=[...S.comps].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  let o=banner()+`<div class="bar"><button class="btn" data-act="add-comp">${S.addComp?"Close":"Add a comp"}</button><button class="btn ghost sm" data-act="copy-comps">Copy comps as CSV</button><span class="msg">${esc(S.msg)}</span></div>`;
-  if(S.addComp){const hs=[...S.homes].sort((a,b)=>a.address.localeCompare(b.address));
-    o+=`<form class="grid" id="compForm"><label class="wide">Address<input id="c-address" name="address" required></label><label>Neighborhood<input id="c-hood" name="hood" placeholder="Willow Glen"></label><label>Builder or type<input id="c-builder" name="builder" placeholder="Thomas James, resale…"></label><label>Status<select id="c-status" name="status"><option>Sold</option><option>Active</option><option>Pending</option><option>Watch</option></select></label><label>Price<input id="c-price" name="price" inputmode="numeric"></label><label>Square feet<input id="c-sf" name="sf" inputmode="numeric"></label><label>Lot sf<input id="c-lot" name="lot" inputmode="numeric"></label><label>Date<input id="c-date" name="date" type="date"></label><label>Days on market<input id="c-dom" name="dom" inputmode="numeric"></label><label>Near which home<select id="c-near" name="near"><option value="">None</option>${hs.map(h=>`<option value="${esc(h.id)}">${esc(h.address)}</option>`).join("")}</select></label><label class="wide">Note<textarea id="c-note" name="note" placeholder="What you saw from the street"></textarea></label><div class="wide"><button class="btn" type="submit">Save comp</button></div></form>`;}
-  return o+`<h2>Comps <small>newest first · value at 3,046 sf uses the 4% per 10% size curve</small></h2>`+(cs.length?compTable(cs):`<div class="quiet">No comps yet. Add the first one you drive past.</div>`);
+  const cs=[...S.comps].sort((a,b)=>(a.hood||"").localeCompare(b.hood||"")||(b.date||"").localeCompare(a.date||""));
+  const ed=S.compEdit&&S.comps.find(c=>c.id===S.compEdit);const miss=S.comps.filter(c=>!c.lat).length;
+  let o=banner()+`<div class="bar"><button class="btn" data-act="add-comp">${S.addComp?"Close":"Add a comp"}</button>${miss?`<button class="btn ghost sm" data-act="locate-comps">Put ${miss} comp${miss>1?"s":""} on the map</button>`:""}<button class="btn ghost sm" data-act="copy-comps">Copy comps as CSV</button><span class="msg">${esc(S.msg)}</span></div>`;
+  if(ed)o+=`<h2>Edit comp</h2>`+compForm(ed,ed.id);else if(S.addComp)o+=compForm(S.compPre||{status:"Sold"},"");
+  const mks=[...new Set(MARKETS.concat(S.comps.map(c=>c.hood).filter(Boolean)))];
+  o+=`<h2>Model X value by market <small>average of sold comps, sized to 3,046 sf, with your adjustments</small></h2><div class="tw"><table><tr><th>Market</th><th class="r">Sold comps</th><th class="r">Raw $/sf</th><th class="r">Model X $/sf</th><th class="r">Range</th><th class="r">Model X value</th></tr>`+mks.map(k=>{const st=mktStats(k);return `<tr><td><b>${esc(k)}</b></td>`+(st?`<td class="r num">${st.n}</td><td class="r num">$${Math.round(st.raw).toLocaleString()}</td><td class="r num"><b>$${Math.round(st.avg).toLocaleString()}</b></td><td class="r num">$${Math.round(st.lo).toLocaleString()} – $${Math.round(st.hi).toLocaleString()}</td><td class="r num"><b>${full(r10(st.val))}</b></td>`:`<td class="r num">0</td><td colspan="4" class="mute">Add a sold comp to price this market</td>`)+`</tr>`;}).join("")+`</table></div>`;
+  o+=`<h2>Comps <small>click a row to edit it or change the adjustment</small></h2>`+(cs.length?compTable(cs):`<div class="quiet">No comps yet. Add the first one you drive past.</div>`);
+  return `<div class="split"><div>${o}</div><div class="side">${searchBox()}<div class="mapbox">${mapSvg([],VIEWS.sj,false,{comps:S.comps.map(c=>c.id),shapes:true,find:true})}</div><div class="filters" style="margin-top:8px">${Object.keys(CCOL).map(k=>`<span class="chipbtn" style="cursor:default"><span class="sw" style="background:${CCOL[k]}"></span>${k}</span>`).join("")}</div><div class="quiet">Click a comp pin to edit it. Search an address above, then "Add as a comp" to drop it in with its location and market filled in.</div></div></div>`;
 }
 function viewLogin(){return `<div class="login"><h1>Sign in</h1><form class="grid" id="loginForm" style="grid-template-columns:1fr"><label>Email<input id="l-email" name="email" type="email" autocomplete="username" required></label><label>Password<input id="l-pass" name="password" type="password" autocomplete="current-password" required></label><div><button class="btn" type="submit">Sign in</button> <span class="msg" style="color:var(--bad)">${esc(S.msg)}</span></div></form></div>`;}
 function viewData(){const c=k=>S[k].length;return `<h1>Data</h1><dl>${row("Homes",c("homes"))}${row("Notes",c("notes"))}${row("Comps",c("comps"))}${row("Areas",c("areas"))}${row("Boundaries",c("shapes"))}</dl><h2>Import</h2><div class="quiet">Paste an export below, or choose a backup file. Records with the same id are overwritten; nothing else is deleted.</div><form id="importForm"><textarea id="imp" name="json" style="width:100%;height:160px;font:11px monospace" placeholder='{"homes":[...],"notes":[...]}'></textarea><div class="bar"><input type="file" id="impFile" accept=".json,application/json"><button class="btn" type="submit">Import</button><span class="msg">${esc(S.msg)}</span></div></form><h2>Backup</h2><div class="bar"><button class="btn ghost" data-act="backup">Download a backup file</button><button class="btn ghost" data-act="signout">Sign out</button></div>`;}
@@ -444,8 +496,16 @@ window.addEventListener("hashchange",()=>{S.edit=false;S.escEdit=false;S.msg="";
 function fail(e){S.err=e&&e.code==="invalid_argument"?"This view can't save changes. Open the tracker from your own account to edit.":"Couldn't save. Check your connection and try again.";render();}
 function csv(rows,cols){return [cols.join(",")].concat(rows.map(r=>cols.map(c=>{let v=r[c];if(c.startsWith("esc.")){v=(r.esc||{})[c.slice(4)];}v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(","))).join("\n");}
 document.addEventListener("click",async e=>{
-  const t=e.target.closest("[data-shape],[data-b],[data-pin],[data-view],[data-st],[data-region],[data-city],[data-area],[data-act],tr[data-go]");if(!t)return;
+  const t=e.target.closest("[data-comp],[data-shape],[data-b],[data-pin],[data-view],[data-st],[data-region],[data-city],[data-area],[data-act],tr[data-go]");if(!t)return;
   if(t.dataset.pin){location.hash="home-"+t.dataset.pin;return;}
+  if(t.dataset.comp&&!t.dataset.act){if(e.target.closest("a,button"))return;S.compEdit=t.dataset.comp;S.addComp=false;S.compPre=null;S.msg="";if(route()!=="comps")location.hash="comps";else render();window.scrollTo&&window.scrollTo(0,0);return;}
+  if(t.dataset.act==="comp-cancel"){S.compEdit="";S.addComp=false;S.compPre=null;render();return;}
+  if(t.dataset.act==="found-clear"){S.found=null;render();return;}
+  if(t.dataset.act==="found-comp"){const F=S.found;S.compPre={address:F.road||F.q,hood:MARKETS.includes(F.market)?F.market:"Other",status:"Sold",lat:F.lat,lng:F.lng,zip:F.zip};S.addComp=true;S.compEdit="";if(route()!=="comps")location.hash="comps";else render();return;}
+  if(t.dataset.act==="found-lot"){const F=S.found;const addr=F.road||F.q;const id=slug(addr);if(!id)return;if(homeById(id)){location.hash="home-"+id;return;}const st=mktStats(F.market),zm=zipModel(F.zip);
+    try{await S.db.doc("homes/"+id).set({region:F.region,address:addr,city:F.city,hood:F.market,zip:F.zip,plan:"X",elv:"X",status:"Planned",lat:F.lat,lng:F.lng,model:st?r10(st.val):zm?r10(zm):null,build:{}});S.found=null;location.hash="home-"+id;}catch(err){fail(err);}return;}
+  if(t.dataset.act==="starter"){try{for(const [name,tier,pts] of STARTER){if(!S.shapes.some(x=>x.name===name))await S.db.doc("shapes/starter-"+slug(name)).set({name,kind:"hood",tier,city:"San Jose",pts,starter:true,note:"Approximate starter boundary. Drag the corners to fix it."});}}catch(err){fail(err);}render();return;}
+  if(t.dataset.act==="locate-comps"){const todo=S.comps.filter(c=>!c.lat);let ok=0;for(const c of todo){S.msg="Locating "+c.address+"…";render();try{const g=await geocode(c.address+(/san jose|,/i.test(c.address)?"":", San Jose, CA"));if(g){ok++;await S.db.doc("comps/"+c.id).update({lat:g.lat,lng:g.lng,zip:g.zip});}}catch(_){ }await sleep(1100);}S.msg="Placed "+ok+" of "+todo.length+" on the map.";render();return;}
   if(t.dataset.shape){S.shape=t.dataset.shape;S.newShape=null;render();return;}
   if(t.dataset.act==="shape-cancel"){S.shape="";S.newShape=null;render();return;}
   if(t.dataset.act==="signout"){await S.sb.auth.signOut();location.reload();return;}
@@ -460,7 +520,7 @@ document.addEventListener("click",async e=>{
   const a=t.dataset.act,id=t.dataset.id;
   if(a==="edit"){S.edit=!S.edit;S.msg="";render();return;}
   if(a==="esc-edit"){S.escEdit=!S.escEdit;render();return;}
-  if(a==="add-comp"){S.addComp=!S.addComp;S.msg="";render();return;}
+  if(a==="add-comp"){S.addComp=!S.addComp;S.compEdit="";S.compPre=null;S.msg="";render();return;}
   if(a==="add-home"){S.addHome=!S.addHome;S.msg="";render();return;}
   if(a==="add-area"){S.addArea=!S.addArea;render();return;}
   if(a==="toggle-e"){S.showE=!S.showE;render();return;}
@@ -480,6 +540,9 @@ document.addEventListener("click",async e=>{
 document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target;
   if(f.id==="loginForm"){const fd0=new FormData(f);S.msg="";const {error}=await S.sb.auth.signInWithPassword({email:fd0.get("email"),password:fd0.get("password")});if(error){S.msg="That email and password didn't work.";render();}else{S.needLogin=false;S.msg="";start();}return;}
+  if(f.id==="searchForm"){const q=String(new FormData(f).get("q")||"").trim();if(!q){S.found=null;render();return;}S.found={q,busy:true};render();
+    try{const g=await geocode(q);if(!g)S.found={q,err:"Couldn't find that address. Add the city and try again."};else{g.q=q;g.market=marketOf(g);g.region=regionOf(g);S.found=g;}}catch(err){S.found={q,err:"Address lookup isn't responding right now. "+(err.message||"")};}
+    render();return;}
   if(!S.db){fail();return;}
   if(f.id==="importForm"){try{let txt=$("imp").value.trim();const fl=$("impFile").files[0];if(!txt&&fl)txt=await fl.text();const d=JSON.parse(txt);let rows=[];["homes","notes","comps","areas","shapes"].forEach(c=>(d[c]||[]).forEach(x=>{const o=Object.assign({},x);const id=String(o.id||"");delete o.id;if(id)rows.push({coll:c,id,data:o});}));
       for(let i=0;i<rows.length;i+=100){const {error}=await S.sb.from("docs").upsert(rows.slice(i,i+100));if(error)throw error;}
@@ -497,10 +560,15 @@ document.addEventListener("submit",async e=>{
     if(f.id==="escNoteForm"){if(!v.text.trim())return;await S.db.collection("notes").add({home:f.dataset.id,kind:"esc",text:v.text.trim(),date:today(),done:false});f.reset();}
     if(f.id==="shapeForm"){const d={name:v.name.trim(),kind:v.kind,tier:Number(v.tier),note:v.note.trim()};if(S.newShape){await S.db.collection("shapes").add(Object.assign(d,{pts:S.newShape.pts,city:S.newShape.city}));S.newShape=null;}else{await S.db.doc("shapes/"+f.dataset.id).update(d);}S.shape="";render();}
     if(f.id==="homeForm"){const id=slug(v.address);if(!id)return;if(homeById(id)){S.msg="That address is already in the tracker.";render();return;}
-      await S.db.doc("homes/"+id).set({region:v.region,address:v.address.trim(),city:v.city.trim(),hood:v.hood.trim(),zip:v.zip.trim(),plan:v.plan,elv:(v.plan==="E"?"Model E":v.plan+" "+v.elv.trim()).trim(),status:v.status,hc:v.hc,lot:n(v.lot),gf:n(v.gf),aop:n(v.aop),acq:n(v.acq),acqDate:v.acqDate,build:{hc:v.hc||""}});S.addHome=false;S.msg="Home added.";render();}
+      await S.db.doc("homes/"+id).set({region:v.region,address:v.address.trim(),city:v.city.trim(),hood:v.hood.trim(),zip:v.zip.trim(),plan:v.plan,elv:(v.plan==="E"?"Model E":v.plan+" "+v.elv.trim()).trim(),status:v.status,hc:v.hc,lot:n(v.lot),gf:n(v.gf),aop:n(v.aop),acq:n(v.acq),acqDate:v.acqDate,build:{hc:v.hc||""}});
+      geocode(v.address.trim()+", "+v.city.trim()+", CA").then(g=>{if(g)S.db.doc("homes/"+id).update({lat:g.lat,lng:g.lng,zip:v.zip.trim()||g.zip,hood:v.hood.trim()||marketOf(g)});}).catch(()=>{});S.addHome=false;S.msg="Home added.";render();}
     if(f.id==="escForm"){const coe=v.coe;delete v.coe;await S.db.doc("homes/"+f.dataset.id).update({coe:coe,esc:v});S.escEdit=false;S.msg="Escrow saved.";render();}
-    if(f.id==="compForm"){const c={address:v.address.trim(),hood:v.hood.trim(),builder:v.builder.trim(),status:v.status,price:n(v.price),sf:n(v.sf),lot:n(v.lot),date:v.date,dom:n(v.dom),near:v.near,note:v.note.trim(),added:today()};
-      await S.db.collection("comps").add(c);S.addComp=false;S.msg="Comp saved.";render();}
+    if(f.id==="compForm"){const id=f.dataset.id,old=id?S.comps.find(x=>x.id===id):null,pre=S.compPre||{};
+      const c={address:v.address.trim(),hood:v.hood,builder:v.builder.trim(),status:v.status,price:n(v.price),sf:n(v.sf),adj:parseFloat(v.adj)||0,adjWhy:v.adjWhy.trim(),lot:n(v.lot),date:v.date,dom:n(v.dom),near:v.near,note:v.note.trim()};
+      if(!old){c.added=today();if(pre.lat){c.lat=pre.lat;c.lng=pre.lng;c.zip=pre.zip;}}
+      if(!(old&&old.lat&&old.address===c.address)&&!c.lat){try{const g=await geocode(c.address+(/,/.test(c.address)?"":", San Jose, CA"));if(g){c.lat=g.lat;c.lng=g.lng;c.zip=g.zip;}}catch(_){ }}
+      if(old)await S.db.doc("comps/"+id).update(c);else await S.db.collection("comps").add(c);
+      S.addComp=false;S.compEdit="";S.compPre=null;S.msg="Comp saved."+(c.lat||(old&&old.lat)?"":" Couldn't place it on the map; check the address.");render();}
   }catch(err){fail(err);}
 });
 function deep(a,b){const o=Object.assign({},a);for(const k in b){const v=b[k];o[k]=(v&&typeof v==="object"&&!Array.isArray(v)&&o[k]&&typeof o[k]==="object"&&!Array.isArray(o[k]))?deep(o[k],v):v;}return o;}
